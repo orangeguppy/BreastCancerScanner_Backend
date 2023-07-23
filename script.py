@@ -20,7 +20,7 @@ weight_decay = 0
 dropout_rate = 0
 selected_optimiser = "Adam"
 
-model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet201', pretrained=True)
+model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet201', weights="DenseNet201_Weights.IMAGENET1K_V1")
 model.to(device)
 
 # Extract the images
