@@ -61,6 +61,17 @@ def split_dataset(dataset, train_ratio, test_ratio):
     train_dataset, test_dataset = random_split(dataset, [num_train_samples, num_test_samples])
     return train_dataset, test_dataset
 
+def split_dataset_with_validation(dataset, train_ratio, validate_ratio, test_ratio):
+    # Calculate the number of samples for each split
+    num_samples = len(dataset)
+    num_train_samples = int(train_ratio * num_samples)
+    num_validate_samples = int(validate_ratio * num_samples)
+    num_test_samples = int(test_ratio * num_samples)
+
+    # Split the dataset
+    train_dataset, validate_dataset, test_dataset = random_split(dataset, [num_train_samples, num_validate_samples, num_test_samples])
+    return train_dataset, validate_dataset, test_dataset
+
 def set_optimiser(selected_optimiser, neuralnet, learning_rate):
     if (selected_optimiser == "Adam"):
         return Adam(neuralnet.parameters(), lr=learning_rate)
