@@ -76,7 +76,7 @@ def set_optimiser(selected_optimiser, neuralnet, learning_rate):
     if (selected_optimiser == "Adam"):
         return Adam(neuralnet.parameters(), lr=learning_rate)
 
-def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimiser):
+def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimiser, validate_dataloader=None):
     best_rate = 1.0
     epoch_counter = 0
 
@@ -123,6 +123,8 @@ def test(neuralnet, device, test_dataset, test_dataloader):
         # For output
         for result in predicted_val: # Each 'result' is an array of 10 values, for instance the first element of result
                                     # stores the probability that the image has the digit '0', index 1 for P(digit is 1), etc
+            print("Result")
+            print(result)
             predicted_dig = torch.argmax(result).item()
             predicted_digits.append(predicted_dig)
 
