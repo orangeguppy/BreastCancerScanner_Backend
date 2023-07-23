@@ -24,8 +24,7 @@ model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet201', pretrained=True)
 model.to(device)
 
 # Extract the images
-if (device == "cuda"):
-    helper_functions.extract_dataset("breakhis-10.zip", "histology_breast")
+helper_functions.extract_dataset("breakhis-10.zip", "histology_breast")
 
 # Build a PyTorch dataset from the extracted images
 dataset = helper_functions.create_dataset("histology_breast/benign", "histology_breast/malignant", 2480, 3720)
@@ -43,7 +42,7 @@ optimiser = helper_functions.set_optimiser(selected_optimiser, model, learning_r
 loss_function = nn.CrossEntropyLoss()
 
 # Train the model
-helper_functions.train(model, device, train_dataloader, 11, loss_function, optimiser)
+helper_functions.train(model, device, train_dataloader, 1, loss_function, optimiser)
 
 # Test the model
 helper_functions.test(model, device, test_dataset, test_dataloader)

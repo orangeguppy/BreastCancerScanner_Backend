@@ -2,14 +2,33 @@
 import torch
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
-from torch.utils.data import random_split
+from torch.utils.data import random_split, Dataset
 from torch.optim import Adam
 from torch import nn, save, load
 import zipfile
 from torch.cuda.amp import autocast, GradScaler
 import random
 
+class RelabeledDataset(Dataset):
+    def __init__(self, original_dataset, new_label):
+        self.data = original_dataset
+        self.new_label = new_label
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        x, _ = self.data[index]  # Assuming the dataset returns (sample, label)
+
+        return x, self.new_label
+
+def extract_dataset(zip_file_path, extract_to_path):
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to_path)
+
 def create_dataset(benign_dataset_path, malignant_dataset_path, num_benign, num_malignant):
+    total_samples = num_benign + num_malignant
+    half_total = total_samples // 2
     transform = transforms.Compose([
         transforms.Resize((224, 224)),  # resize all images to 224px x 224px
         transforms.ToTensor()  # convert each image to a tensor
@@ -17,12 +36,19 @@ def create_dataset(benign_dataset_path, malignant_dataset_path, num_benign, num_
     benign_dataset = datasets.ImageFolder(root=benign_dataset_path, transform=transform)
     malignant_dataset = datasets.ImageFolder(root=malignant_dataset_path, transform=transform)
 
+    benign_dataset = RelabeledDataset(benign_dataset, 0)
+    malignant_dataset = RelabeledDataset(malignant_dataset, 1)
+
     # Generate a random array of indices for undersampling the malignant class
     malignant_indices = random.sample(range(0, 5428), num_malignant)
     malignant_dataset = torch.utils.data.Subset(malignant_dataset, malignant_indices)
 
     # Combine the datasets
     dataset = torch.utils.data.ConcatDataset([benign_dataset, malignant_dataset])
+
+    # Reshuffe and recombine
+    first_half, second_half = random_split(dataset, [half_total, half_total])
+    dataset = torch.utils.data.ConcatDataset([first_half, second_half])
     return dataset
 
 def split_dataset(dataset, train_ratio, test_ratio):
@@ -40,25 +66,21 @@ def set_optimiser(selected_optimiser, neuralnet, learning_rate):
         return Adam(neuralnet.parameters(), lr=learning_rate)
 
 def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimiser):
-    num_batches = 0
     best_rate = 1.0
+    epoch_counter = 0
+
     for epoch in range(num_epochs): # Train for 11 epochs
-        print("Started epoch")
         for batch in train_dataloader:
-            print("Batch ", num_batches, " started")
             x,y = batch 
             x, y = x.to(device), y.to(device)
             predicted_val = neuralnet(x)
             loss = loss_function(predicted_val, y)
 
-            print("Batch halfway")
             # Use backpropagation
             loss.backward() 
             optimiser.step()
             optimiser.zero_grad()
-            num_batches = num_batches + 1
-            print("Batch ended")
-        print("Epoch done", loss.item())
+        print("Epoch done :", epoch_counter, "Loss =", loss.item())
         if (loss.item() < best_rate):
             best_rate = loss.item()
             with open('trained_weights.pt', 'wb') as f:      # Save the model weights
