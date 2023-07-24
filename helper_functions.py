@@ -1,4 +1,3 @@
-# import neuralnetwork
 import torch
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
@@ -92,13 +91,14 @@ def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimi
             optimiser.step()
             optimiser.zero_grad()
         print("Epoch done :", epoch_counter, "Loss =", loss.item())
+        epoch_counter += 1
         if (loss.item() < best_rate):
             best_rate = loss.item()
             with open('trained_weights.pt', 'wb') as f:      # Save the model weights
                     save(neuralnet.state_dict(), f)
 
 # Test the model
-def test(neuralnet, device, test_dataset, test_dataloader):
+def test(neuralnet, device, test_dataset, test_dataloader, classification_threshold):
     # Test the model
     with open('trained_weights.pt', 'rb') as f:
         state_dict = torch.load(f, map_location=device)
@@ -107,6 +107,11 @@ def test(neuralnet, device, test_dataset, test_dataloader):
     # Store the total number of entries and correctly-predicted output
     num_entries = len(test_dataset)
     num_correct = 0
+
+    true_positives = 0
+    true_negatives = 0
+    false_positives = 0
+    false_negatives = 0
 
     # Print out the first batch only
     first_batch_printed = False
@@ -123,9 +128,15 @@ def test(neuralnet, device, test_dataset, test_dataloader):
         # For output
         for result in predicted_val: # Each 'result' is an array of 10 values, for instance the first element of result
                                     # stores the probability that the image has the digit '0', index 1 for P(digit is 1), etc
-            print("Result")
-            print(result)
-            predicted_dig = torch.argmax(result).item()
+            # print("Result")
+            # print(result)
+            # predicted_dig = torch.argmax(result).item()
+            # output_probs = torch.softmax(result, dim=1)
+            class_probabilities = torch.softmax(result, dim=0)
+
+            predicted_dig = (class_probabilities[1] >= classification_threshold).int()
+            # print("Predicted digit")
+            # print(predicted_dig)
             predicted_digits.append(predicted_dig)
 
         # Compare the input and output
@@ -133,10 +144,15 @@ def test(neuralnet, device, test_dataset, test_dataloader):
         for i in range(len(actual_values)):
             predicted_output = predicted_digits[i]
             actual_output = actual_values[i].item()
-
-            # Check if the output is correct
-            if (predicted_output == actual_output):
-                num_correct += 1
+            
+            if (predicted_output == 1 and actual_output == 1):
+                true_positives += 1
+            elif (predicted_output == 0 and actual_output == 0):
+                true_negatives += 1
+            elif (predicted_output == 1 and actual_output == 0):
+                false_positives += 1
+            elif (predicted_output == 0 and actual_output == 1):
+                false_negatives += 1
 
             # Print out the results if it's the first batch
             if (first_batch_printed is False):
@@ -146,6 +162,5 @@ def test(neuralnet, device, test_dataset, test_dataloader):
         first_batch_printed = True
 
     # Print the results of the test
-    print("NUMBER OF ENTRIES: ", num_entries)
-    print("NUMBER OF CORRECT ENTRIES: ", num_correct)
-    print("ACCURACY RATE: ", num_correct / num_entries)
+    print("Accuracy :", (true_positives + true_negatives) / (true_positives + true_negatives + false_positives + false_negatives))
+    print("F1 Score :", (true_positives / (true_positives + 0.5 * (false_positives + false_negatives))))

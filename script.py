@@ -14,11 +14,20 @@ print(f"Using device: {device}")
 
 # Define hyperparameters
 batch_size = 32
-num_epochs = 11
+num_epochs = 10
 learning_rate = 0.0001
 weight_decay = 0
 dropout_rate = 0
 selected_optimiser = "Adam"
+classification_threshold = 0.5
+
+# param_grid = {
+#     'batch_size': [16, 32, 64, 128]
+#     'learning_rate': [0.0001, 0.01]
+#     'weight_decay': [0]
+#     'dropout_rate': [0]
+#     'selected_optimiser': ["Adam"]
+# }
 
 # Dataset split ratios
 train_ratio = 0.8
@@ -30,6 +39,7 @@ model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet201', weights="DenseNe
 # Modify the final fully connected layer for binary classification (2 classes)
 in_features = model.classifier.in_features
 model.classifier = nn.Linear(in_features, 2)
+
 model.to(device) # Move it to the GPU
 
 # Extract the images
@@ -55,7 +65,7 @@ optimiser = helper_functions.set_optimiser(selected_optimiser, model, learning_r
 loss_function = nn.CrossEntropyLoss()
 
 # Train the model
-# helper_functions.train(model, device, train_dataloader, num_epochs, loss_function, optimiser)
+helper_functions.train(model, device, train_dataloader, num_epochs, loss_function, optimiser)
 
 # Test the model
-helper_functions.test(model, device, test_dataset, test_dataloader)
+helper_functions.test(model, device, test_dataset, test_dataloader, classification_threshold)
