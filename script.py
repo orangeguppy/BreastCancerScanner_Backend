@@ -8,6 +8,7 @@ from torch.utils.data import random_split
 from torch.optim import Adam
 from torch import nn, save, load
 import zipfile
+from custom_densenet201 import CustomDenseNet201
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -21,24 +22,26 @@ dropout_rate = 0
 selected_optimiser = "Adam"
 classification_threshold = 0.5
 
-# param_grid = {
-#     'batch_size': [16, 32, 64, 128]
-#     'learning_rate': [0.0001, 0.01]
-#     'weight_decay': [0]
-#     'dropout_rate': [0]
-#     'selected_optimiser': ["Adam"]
-# }
+param_grid = {
+    'batch_size': [16, 32, 64, 128],
+    'learning_rate': [0.0001, 0.01],
+    'weight_decay': [0],
+    'dropout_rate': [0],
+    'selected_optimiser': ["Adam"]
+}
 
 # Dataset split ratios
 train_ratio = 0.8
 validate_ratio = 0
 test_ratio = 0.2
 
-model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet201', weights="DenseNet201_Weights.IMAGENET1K_V1")
+# model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet201', weights="DenseNet201_Weights.IMAGENET1K_V1")
 
-# Modify the final fully connected layer for binary classification (2 classes)
-in_features = model.classifier.in_features
-model.classifier = nn.Linear(in_features, 2)
+# # Modify the final fully connected layer for binary classification (2 classes)
+# in_features = model.classifier.in_features
+# model.classifier = nn.Linear(in_features, 2)
+
+model = CustomDenseNet201(dropout_prob=0)
 
 model.to(device) # Move it to the GPU
 
@@ -61,7 +64,7 @@ train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_s
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
 # Create the model, and then define the optimiser and loss functions
-optimiser = helper_functions.set_optimiser(selected_optimiser, model, learning_rate)
+optimiser = helper_functions.set_optimiser(selected_optimiser, model, learning_rate, weight_decay)
 loss_function = nn.CrossEntropyLoss()
 
 # Train the model

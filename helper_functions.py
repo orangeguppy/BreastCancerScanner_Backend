@@ -71,9 +71,9 @@ def split_dataset_with_validation(dataset, train_ratio, validate_ratio, test_rat
     train_dataset, validate_dataset, test_dataset = random_split(dataset, [num_train_samples, num_validate_samples, num_test_samples])
     return train_dataset, validate_dataset, test_dataset
 
-def set_optimiser(selected_optimiser, neuralnet, learning_rate):
+def set_optimiser(selected_optimiser, neuralnet, learning_rate, weight_decay):
     if (selected_optimiser == "Adam"):
-        return Adam(neuralnet.parameters(), lr=learning_rate)
+        return Adam(neuralnet.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
 def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimiser, validate_dataloader=None):
     best_rate = 1.0
@@ -81,7 +81,7 @@ def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimi
 
     for epoch in range(num_epochs): # Train for 11 epochs
         for batch in train_dataloader:
-            x,y = batch 
+            x,y = batch
             x, y = x.to(device), y.to(device)
             predicted_val = neuralnet(x)
             loss = loss_function(predicted_val, y)
@@ -90,12 +90,15 @@ def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimi
             loss.backward() 
             optimiser.step()
             optimiser.zero_grad()
+
         print("Epoch done :", epoch_counter, "Loss =", loss.item())
         epoch_counter += 1
-        if (loss.item() < best_rate):
-            best_rate = loss.item()
-            with open('trained_weights.pt', 'wb') as f:      # Save the model weights
-                    save(neuralnet.state_dict(), f)
+
+        best_rate = loss.item()
+        with open('trained_weights.pt', 'wb') as f:      # Save the model weights
+                save(neuralnet.state_dict(), f)
+
+        accuracy, f1_score = test(neuralnet, device, validate_dataset=None, validate_dataloader=None, classification_threshold)
 
 # Test the model
 def test(neuralnet, device, test_dataset, test_dataloader, classification_threshold):
@@ -121,26 +124,16 @@ def test(neuralnet, device, test_dataset, test_dataloader, classification_thresh
         x,actual_values = batch 
 
         # Run the input into the neural network
-        # predicted_val = neuralnet(x) # Raw data from the network
         predicted_val = neuralnet(x.to(device))
         predicted_digits = [] # Store an array of the predicted digits for this batch
         
         # For output
-        for result in predicted_val: # Each 'result' is an array of 10 values, for instance the first element of result
-                                    # stores the probability that the image has the digit '0', index 1 for P(digit is 1), etc
-            # print("Result")
-            # print(result)
-            # predicted_dig = torch.argmax(result).item()
-            # output_probs = torch.softmax(result, dim=1)
+        for result in predicted_val:
             class_probabilities = torch.softmax(result, dim=0)
 
             predicted_dig = (class_probabilities[1] >= classification_threshold).int()
-            # print("Predicted digit")
-            # print(predicted_dig)
             predicted_digits.append(predicted_dig)
 
-        # Compare the input and output
-        if (first_batch_printed is False): print("-----------------FIRST BATCH STARTED-----------------")
         for i in range(len(actual_values)):
             predicted_output = predicted_digits[i]
             actual_output = actual_values[i].item()
@@ -153,14 +146,23 @@ def test(neuralnet, device, test_dataset, test_dataloader, classification_thresh
                 false_positives += 1
             elif (predicted_output == 0 and actual_output == 1):
                 false_negatives += 1
-
-            # Print out the results if it's the first batch
-            if (first_batch_printed is False):
-                print("Predicted Actual: ", predicted_output, actual_output)
         
-        if (first_batch_printed is False): print("-----------------FIRST BATCH ENDED, ONLY THIS BATCH IS SHOWN-----------------")
-        first_batch_printed = True
+        if (first_batch_printed is False):
+            print_batch(predicted_digits, actual_values)
+            first_batch_printed = True
+
+    accuracy = (true_positives + true_negatives) / (true_positives + true_negatives + false_positives + false_negatives)
+    f1_score = (true_positives / (true_positives + 0.5 * (false_positives + false_negatives)))
 
     # Print the results of the test
-    print("Accuracy :", (true_positives + true_negatives) / (true_positives + true_negatives + false_positives + false_negatives))
-    print("F1 Score :", (true_positives / (true_positives + 0.5 * (false_positives + false_negatives))))
+    print("Accuracy :", accuracy)
+    print("F1 Score :", f1_score)
+    return accuracy, f1_score
+
+def print_batch(predicted_digits, actual_values):
+    print("-----------------FIRST BATCH-----------------")
+    for i in range(len(predicted_digits)):
+        predicted_output = predicted_digits[i]
+        actual_output = actual_values[i].item()
+        print("Predicted Actual: ", predicted_output, actual_output)
+    print("---------------------------------------------")
