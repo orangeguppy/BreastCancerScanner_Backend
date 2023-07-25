@@ -35,12 +35,6 @@ train_ratio = 0.8
 validate_ratio = 0
 test_ratio = 0.2
 
-# model = torch.hub.load('pytorch/vision:v0.10.0', 'densenet201', weights="DenseNet201_Weights.IMAGENET1K_V1")
-
-# # Modify the final fully connected layer for binary classification (2 classes)
-# in_features = model.classifier.in_features
-# model.classifier = nn.Linear(in_features, 2)
-
 model = CustomDenseNet201(dropout_prob=0)
 
 model.to(device) # Move it to the GPU
@@ -71,4 +65,4 @@ loss_function = nn.CrossEntropyLoss()
 helper_functions.train(model, device, train_dataloader, num_epochs, loss_function, optimiser)
 
 # Test the model
-helper_functions.test(model, device, test_dataset, test_dataloader, classification_threshold)
+helper_functions.test(model, device, test_dataset, test_dataloader, classification_threshold, False)

@@ -75,11 +75,16 @@ def set_optimiser(selected_optimiser, neuralnet, learning_rate, weight_decay):
     if (selected_optimiser == "Adam"):
         return Adam(neuralnet.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
-def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimiser, validate_dataloader=None):
-    best_rate = 1.0
+def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimiser, validate_dataset=None, validate_dataloader=None):
+    # Variables for storing the highest scores/best loss during validation
+    highest_accuracy = 0
+    highest_f1_score = 0
+    lowest_loss = 1.00000
+
+    # Count the number of epochs
     epoch_counter = 0
 
-    for epoch in range(num_epochs): # Train for 11 epochs
+    for epoch in range(num_epochs): # For each Epoch
         for batch in train_dataloader:
             x,y = batch
             x, y = x.to(device), y.to(device)
@@ -91,26 +96,35 @@ def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimi
             optimiser.step()
             optimiser.zero_grad()
 
-        print("Epoch done :", epoch_counter, "Loss =", loss.item())
+        print("Epoch", epoch_counter, ": Loss =", loss.item())
+        
+        # If there is validation
+        if (validate_dataset != None):
+            accuracy, f1_score = test(neuralnet, device, validate_dataset, validate_dataloader, classification_threshold, True)
+            if (f1_score > highest_f1_score):
+                highest_f1_score = f1_score
+                with open('trained_weights.pt', 'wb') as f:      # Save the model weights
+                        save(neuralnet.state_dict(), f)
+        else:
+            if (loss < lowest_loss):
+                lowest_loss = loss
+                print("The lowest loss is now", lowest_loss)
+                with open('trained_weights.pt', 'wb') as f:      # Save the model weights
+                        save(neuralnet.state_dict(), f)
         epoch_counter += 1
 
-        best_rate = loss.item()
-        with open('trained_weights.pt', 'wb') as f:      # Save the model weights
-                save(neuralnet.state_dict(), f)
-
-        accuracy, f1_score = test(neuralnet, device, validate_dataset=None, validate_dataloader=None, classification_threshold)
-
 # Test the model
-def test(neuralnet, device, test_dataset, test_dataloader, classification_threshold):
-    # Test the model
-    with open('trained_weights.pt', 'rb') as f:
-        state_dict = torch.load(f, map_location=device)
-        neuralnet.load_state_dict(state_dict)
+def test(neuralnet, device, test_dataset, test_dataloader, classification_threshold, is_validating):
+    # Only load the model for testing after the training process
+    if (is_validating == False):
+        with open('trained_weights.pt', 'rb') as f:
+            state_dict = torch.load(f, map_location=device)
+            neuralnet.load_state_dict(state_dict)
 
     # Store the total number of entries and correctly-predicted output
     num_entries = len(test_dataset)
-    num_correct = 0
 
+    # Store TP, TN, FP, FN
     true_positives = 0
     true_negatives = 0
     false_positives = 0
@@ -138,6 +152,7 @@ def test(neuralnet, device, test_dataset, test_dataloader, classification_thresh
             predicted_output = predicted_digits[i]
             actual_output = actual_values[i].item()
             
+            # Update the number of TPs, TNs, FPs, and FNs
             if (predicted_output == 1 and actual_output == 1):
                 true_positives += 1
             elif (predicted_output == 0 and actual_output == 0):
@@ -147,10 +162,12 @@ def test(neuralnet, device, test_dataset, test_dataloader, classification_thresh
             elif (predicted_output == 0 and actual_output == 1):
                 false_negatives += 1
         
+        # Print if its the first batch
         if (first_batch_printed is False):
             print_batch(predicted_digits, actual_values)
             first_batch_printed = True
 
+    # Evaluate model performance
     accuracy = (true_positives + true_negatives) / (true_positives + true_negatives + false_positives + false_negatives)
     f1_score = (true_positives / (true_positives + 0.5 * (false_positives + false_negatives)))
 
