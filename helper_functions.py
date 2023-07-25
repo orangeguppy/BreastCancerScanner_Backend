@@ -8,6 +8,7 @@ import zipfile
 from torch.cuda.amp import autocast, GradScaler
 import random
 
+# Custom class for labelling a dataset
 class RelabeledDataset(Dataset):
     def __init__(self, original_dataset, new_label):
         self.data = original_dataset
@@ -17,7 +18,7 @@ class RelabeledDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        x, _ = self.data[index]  # Assuming the dataset returns (sample, label)
+        x, _ = self.data[index]
 
         return x, self.new_label
 
@@ -103,6 +104,7 @@ def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimi
             accuracy, f1_score = test(neuralnet, device, validate_dataset, validate_dataloader, classification_threshold, True)
             if (f1_score > highest_f1_score):
                 highest_f1_score = f1_score
+                print("The highest F1 Score (using the validation set) is now", highest_f1_score)
                 with open('trained_weights.pt', 'wb') as f:      # Save the model weights
                         save(neuralnet.state_dict(), f)
         else:
