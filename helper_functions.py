@@ -108,7 +108,7 @@ def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimi
         else:
             if (loss < lowest_loss):
                 lowest_loss = loss
-                print("The lowest loss is now", lowest_loss)
+                print("The lowest loss is now", lowest_loss.item())
                 with open('trained_weights.pt', 'wb') as f:      # Save the model weights
                         save(neuralnet.state_dict(), f)
         epoch_counter += 1
@@ -179,7 +179,7 @@ def test(neuralnet, device, test_dataset, test_dataloader, classification_thresh
 def print_batch(predicted_digits, actual_values):
     print("-----------------FIRST BATCH-----------------")
     for i in range(len(predicted_digits)):
-        predicted_output = predicted_digits[i]
+        predicted_output = predicted_digits[i].item()
         actual_output = actual_values[i].item()
         print("Predicted Actual: ", predicted_output, actual_output)
     print("---------------------------------------------")
