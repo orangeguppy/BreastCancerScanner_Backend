@@ -22,14 +22,14 @@ print(f"Using device: {device}")
 # weight_decay = 0
 # dropout_rate = 0
 # selected_optimiser = "Adam"
-# classification_threshold = 0.5
+classification_threshold = 0.5
 
 param_grid = {
-    'batch_size': [16, 32, 64, 128],
-    'learning_rate': [0.0001, 0.01],
+    'selected_optimiser': ["Adam", "SGD"],
     'weight_decay': [0, 0.01, 0.001],
     'dropout_rate': [0, 0.05, 0.1, 0.15, 0.2],
-    'selected_optimiser': ["Adam", "SGD"]
+    'batch_size': [16, 32, 64, 128],
+    'learning_rate': [0.0001, 0.01]
 }
 
 # Generate all combinations of hyperparameters
@@ -41,7 +41,7 @@ validate_ratio = 0
 test_ratio = 0.2
 
 # Extract the images
-helper_functions.extract_dataset("breakhis-10.zip", "histology_breast")
+# helper_functions.extract_dataset("breakhis-10.zip", "histology_breast")
 
 # Build a PyTorch dataset from the extracted images
 dataset = helper_functions.create_dataset("histology_breast/benign", "histology_breast/malignant", 2480, 3720)
@@ -69,6 +69,9 @@ for combination in all_combinations:
     mlflow.log_param("test_ratio", test_ratio)
     mlflow.log_param("validate_ratio", validate_ratio)
 
+    # Log the classification threshold
+    mlflow.log_param("classification_threshold", classification_threshold)
+
     # Split the dataset into training, validating, and testing sets
     if (validate_ratio == 0):
         train_dataset, test_dataset = helper_functions.split_dataset(dataset, train_ratio, test_ratio)
@@ -88,6 +91,7 @@ for combination in all_combinations:
 
     # Train the model
     loss = helper_functions.train(model, device, train_dataloader, 11, loss_function, optimiser)
+    mlflow.log_metric("loss", loss)
 
     # Test the model
     accuracy, f1_score = helper_functions.test(model, device, test_dataset, test_dataloader, classification_threshold, False)
@@ -95,10 +99,12 @@ for combination in all_combinations:
     # Log model performance metrics
     mlflow.log_metric("accuracy", accuracy)
     mlflow.log_metric("f1_score", f1_score)
-    mlflow.log_metric("loss", loss)
 
-    # Save the model
-    mlflow.pytorch.log_model("trained_weights.pt")
+    # Load the model weights from the saved .pt file
+    model.load_state_dict(torch.load("trained_weights.pt"))
+
+    # Log the model as an artifact in MLflow
+    mlflow.pytorch.log_model(model, artifact_path="densenet201_models")
 
     # End the run
     mlflow.end_run()
