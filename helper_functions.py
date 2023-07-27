@@ -2,7 +2,7 @@ import torch
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.utils.data import random_split, Dataset
-from torch.optim import Adam
+from torch.optim import Adam, SGD
 from torch import nn, save, load
 import zipfile
 from torch.cuda.amp import autocast, GradScaler
@@ -75,12 +75,15 @@ def split_dataset_with_validation(dataset, train_ratio, validate_ratio, test_rat
 def set_optimiser(selected_optimiser, neuralnet, learning_rate, weight_decay):
     if (selected_optimiser == "Adam"):
         return Adam(neuralnet.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    elif (selected_optimiser == "SGD"):
+        return SGD(neuralnet.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
 def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimiser, validate_dataset=None, validate_dataloader=None):
     # Variables for storing the highest scores/best loss during validation
     highest_accuracy = 0
     highest_f1_score = 0
-    lowest_loss = 1.00000
+    lowest_loss = 1.00
+    final_loss = 0
 
     # Count the number of epochs
     epoch_counter = 0
@@ -105,15 +108,18 @@ def train(neuralnet, device, train_dataloader, num_epochs, loss_function, optimi
             if (f1_score > highest_f1_score):
                 highest_f1_score = f1_score
                 print("The highest F1 Score (using the validation set) is now", highest_f1_score)
+                final_loss = loss
                 with open('trained_weights.pt', 'wb') as f:      # Save the model weights
                         save(neuralnet.state_dict(), f)
         else:
             if (loss < lowest_loss):
                 lowest_loss = loss
                 print("The lowest loss is now", lowest_loss.item())
+                final_loss = loss
                 with open('trained_weights.pt', 'wb') as f:      # Save the model weights
                         save(neuralnet.state_dict(), f)
         epoch_counter += 1
+    return final_loss
 
 # Test the model
 def test(neuralnet, device, test_dataset, test_dataloader, classification_threshold, is_validating):

@@ -22,7 +22,3 @@ class CustomDenseNet201(nn.Module):
 
     def forward(self, x):
         return self.densenet(x)
-
-# Example usage:
-dropout_prob = 0.5
-model = CustomDenseNet201(dropout_prob=dropout_prob)

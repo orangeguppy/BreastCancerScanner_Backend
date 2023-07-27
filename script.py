@@ -1,43 +1,44 @@
 import torch
 
 import helper_functions
-import torch
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.utils.data import random_split
 from torch.optim import Adam
 from torch import nn, save, load
 import zipfile
+from itertools import product
 from custom_densenet201 import CustomDenseNet201
+import mlflow
+from databricks_credentials import expt_url
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Define hyperparameters
-batch_size = 32
-num_epochs = 10
-learning_rate = 0.0001
-weight_decay = 0
-dropout_rate = 0
-selected_optimiser = "Adam"
-classification_threshold = 0.5
+# batch_size = 32
+# num_epochs = 10
+# learning_rate = 0.0001
+# weight_decay = 0
+# dropout_rate = 0
+# selected_optimiser = "Adam"
+# classification_threshold = 0.5
 
 param_grid = {
     'batch_size': [16, 32, 64, 128],
     'learning_rate': [0.0001, 0.01],
-    'weight_decay': [0],
-    'dropout_rate': [0],
-    'selected_optimiser': ["Adam"]
+    'weight_decay': [0, 0.01, 0.001],
+    'dropout_rate': [0, 0.05, 0.1, 0.15, 0.2],
+    'selected_optimiser': ["Adam", "SGD"]
 }
+
+# Generate all combinations of hyperparameters
+all_combinations = list(product(*param_grid.values()))
 
 # Dataset split ratios
 train_ratio = 0.8
 validate_ratio = 0
 test_ratio = 0.2
-
-model = CustomDenseNet201(dropout_prob=0)
-
-model.to(device) # Move it to the GPU
 
 # Extract the images
 helper_functions.extract_dataset("breakhis-10.zip", "histology_breast")
@@ -46,23 +47,58 @@ helper_functions.extract_dataset("breakhis-10.zip", "histology_breast")
 dataset = helper_functions.create_dataset("histology_breast/benign", "histology_breast/malignant", 2480, 3720)
 print("The dataset has", len(dataset), "samples")
 
-# Split the dataset into training, validating, and testing sets
-if (validate_ratio == 0):
-    train_dataset, test_dataset = helper_functions.split_dataset(dataset, train_ratio, test_ratio)
-else:
-    train_dataset, validate_dataset, test_dataset = helper_functions.split_dataset_with_validation(dataset, train_ratio, validate_ratio, test_ratio)
-    validate_dataloader = torch.utils.data.DataLoader(validate_dataset, batch_size=batch_size, shuffle=True)
+# Start an MLflow experiment and make it active
+mlflow.set_tracking_uri("databricks")
+mlflow.set_experiment(expt_url)
 
-# Create dataloaders for the training dataset and testing dataset
-train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+# Iterate through each combination
+for combination in all_combinations:
+    # Store the current combination of hyperparameters
+    hyperparameters = dict(zip(param_grid.keys(), combination))
 
-# Create the model, and then define the optimiser and loss functions
-optimiser = helper_functions.set_optimiser(selected_optimiser, model, learning_rate, weight_decay)
-loss_function = nn.CrossEntropyLoss()
+    # Generate a run name
+    name_parts = [f"{key}_{value}" for key, value in hyperparameters.items()]
+    run_name = "_".join(name_parts)
 
-# Train the model
-helper_functions.train(model, device, train_dataloader, num_epochs, loss_function, optimiser)
+    # Begin a run for this combination
+    mlflow.start_run(run_name=run_name)
 
-# Test the model
-helper_functions.test(model, device, test_dataset, test_dataloader, classification_threshold, False)
+    # Log the hyperparameters
+    mlflow.log_params(hyperparameters)
+    mlflow.log_param("train_ratio", train_ratio)
+    mlflow.log_param("test_ratio", test_ratio)
+    mlflow.log_param("validate_ratio", validate_ratio)
+
+    # Split the dataset into training, validating, and testing sets
+    if (validate_ratio == 0):
+        train_dataset, test_dataset = helper_functions.split_dataset(dataset, train_ratio, test_ratio)
+    else:
+        train_dataset, validate_dataset, test_dataset = helper_functions.split_dataset_with_validation(dataset, train_ratio, validate_ratio, test_ratio)
+        validate_dataloader = torch.utils.data.DataLoader(validate_dataset, batch_size=hyperparameters["batch_size"], shuffle=True)
+
+    # Create dataloaders for the training dataset and testing dataset
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=hyperparameters["batch_size"], shuffle=True)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=hyperparameters["batch_size"], shuffle=True)
+    
+    # Create the model, and then define the optimiser and loss functions
+    model = CustomDenseNet201(dropout_prob=hyperparameters["dropout_rate"])
+    model.to(device) # Move it to the GPU/CPU
+    optimiser = helper_functions.set_optimiser(hyperparameters["selected_optimiser"], model, hyperparameters["learning_rate"], hyperparameters["weight_decay"])
+    loss_function = nn.CrossEntropyLoss()
+
+    # Train the model
+    loss = helper_functions.train(model, device, train_dataloader, 11, loss_function, optimiser)
+
+    # Test the model
+    accuracy, f1_score = helper_functions.test(model, device, test_dataset, test_dataloader, classification_threshold, False)
+
+    # Log model performance metrics
+    mlflow.log_metric("accuracy", accuracy)
+    mlflow.log_metric("f1_score", f1_score)
+    mlflow.log_metric("loss", loss)
+
+    # Save the model
+    mlflow.pytorch.log_model("trained_weights.pt")
+
+    # End the run
+    mlflow.end_run()
